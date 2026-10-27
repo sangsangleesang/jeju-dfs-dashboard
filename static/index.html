@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>제주 지정면세점 수요 대시보드</title>
+<meta name="description" content="제주 입도·방문, 검색 트렌드, 우도·중문, 날씨를 10일·1개월 단위로 보는 대시보드">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b5f73'/%3E%3Ccircle cx='22' cy='10' r='5' fill='%23ef7d1a'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="mark" aria-hidden="true"></div>
+    <div style="min-width:0">
+      <h1>제주 지정면세점 수요 대시보드</h1>
+      <small>입도·방문 · 검색 트렌드 · 우도·중문 · 날씨</small>
+    </div>
+  </div>
+  <div class="top-actions">
+    <div class="seg" role="tablist" aria-label="기간">
+      <button data-period="10" class="on" role="tab">최근 10일</button>
+      <button data-period="30" role="tab">최근 1개월</button>
+    </div>
+    <span class="updated" id="updated">불러오는 중…</span>
+    <button class="btn" id="refreshBtn" title="지금 다시 불러오기">↻ 새로고침</button>
+    <a class="btn" href="/admin">데이터 입력</a>
+  </div>
+</header>
+
+<nav class="mtabs" id="mtabs"></nav>
+
+<div class="layout">
+  <aside class="side" id="side">
+    <a href="#overview" class="on"><span class="dot"></span>개요</a>
+    <a href="#visitors"><span class="dot"></span>입도·방문</a>
+    <a href="#search"><span class="dot"></span>검색 트렌드</a>
+    <a href="#spots"><span class="dot"></span>우도·중문</a>
+    <a href="#weather"><span class="dot"></span>날씨</a>
+    <a href="#sales"><span class="dot"></span>매출 연계</a>
+    <a href="#report"><span class="dot"></span>10일·월간 리포트</a>
+    <a href="#sources"><span class="dot"></span>데이터 출처</a>
+    <div class="side-foot">화면은 10분마다 자동으로 새로 불러옵니다. 출처마다 공개 주기가 달라 기준일이 서로 다를 수 있습니다.</div>
+  </aside>
+
+  <main id="main">
+    <div class="loading" id="loading">데이터를 불러오는 중입니다…</div>
+    <div id="app" hidden>
+      <div id="banner"></div>
+
+      <section id="overview">
+        <div class="sec-head"><div><h2>개요</h2><p id="periodText"></p></div></div>
+        <div class="grid kpis" id="kpis"></div>
+        <div class="grid g2" style="margin-top:14px">
+          <div class="card">
+            <h3>수요 흐름 비교</h3>
+            <p class="desc">각 지표를 기간 평균 = 100으로 맞춰 같은 축에서 비교합니다.</p>
+            <div class="chart-box"><canvas id="cFlow"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>직전 기간 대비 주요 변화</h3>
+            <p class="desc">일평균 기준으로 변화가 큰 순서입니다.</p>
+            <ul class="movers" id="movers"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="visitors">
+        <div class="sec-head"><div><h2>입도·방문 현황</h2><p>제주를 찾은 내국인 수요입니다. 점선은 직전 같은 길이의 기간입니다.</p></div></div>
+        <div class="grid g2">
+          <div class="card">
+            <h3>제주 외지인 방문자수 <span id="bKto"></span></h3>
+            <p class="desc">한국관광공사 데이터랩(KT 통신 데이터). 하루 머문 사람을 날마다 세는 체류 연인원이라 입도객 수보다 큽니다.</p>
+            <div class="chart-box"><canvas id="cKto"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>내국인 입도객 <span class="badge manual">입력</span></h3>
+            <p class="desc">제주특별자치도관광협회 집계를 관리자 화면에서 입력한 값입니다.</p>
+            <div class="chart-box" id="boxInbound"><canvas id="cInbound"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>제주 외국인 방문자수 <span id="bKto2"></span></h3>
+            <p class="desc">참고 지표 · SKT 통신 데이터 기반.</p>
+            <div class="chart-box short"><canvas id="cKtoFor"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>요일별 평균 (외지인 방문자)</h3>
+            <p class="desc">최근 4주 요일 평균. 판촉 요일·인력 배치 참고용.</p>
+            <div class="chart-box short"><canvas id="cDow"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="search">
+        <div class="sec-head"><div><h2>검색 트렌드</h2><p>검색량 그 자체가 아니라 조회 기간 중 가장 많은 날을 100으로 놓은 상대 지수입니다.</p></div></div>
+        <div class="grid g2">
+          <div class="card">
+            <h3>네이버 · 항공권 · 렌트카 · 면세점 <span id="bNaver"></span></h3>
+            <p class="desc">네이버 데이터랩 검색어 트렌드 (전일까지)</p>
+            <div class="chart-box tall"><canvas id="cNaver"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>구글 · 같은 키워드 <span id="bGoogle"></span></h3>
+            <p class="desc">Google Trends 대한민국 (SerpApi 경유)</p>
+            <div class="chart-box tall"><canvas id="cGoogle"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>면세점 검색 비교 <span id="bDfs"></span></h3>
+            <p class="desc">공사 지정면세점 · JDC · 제주 시내면세점 관련 검색어 묶음 (네이버)</p>
+            <div class="chart-box"><canvas id="cDfs"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>키워드 요약</h3>
+            <p class="desc">선택 기간 일평균 지수와 직전 기간 대비 변화</p>
+            <div class="table-wrap"><table id="tKeywords"></table></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="spots">
+        <div class="sec-head"><div><h2>우도 · 중문관광단지</h2><p>입력된 방문객 수와 검색 관심도, 현장 날씨를 함께 봅니다.</p></div></div>
+        <div class="grid g2">
+          <div class="card">
+            <h3>우도</h3>
+            <p class="desc">방문객(입력) · 네이버 '우도' 검색 지수 · 우도 최대풍속</p>
+            <div class="chart-box"><canvas id="cUdo"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>중문관광단지</h3>
+            <p class="desc">방문객(입력) · 네이버 '중문관광단지' 검색 지수 · 중문 강수량</p>
+            <div class="chart-box"><canvas id="cJungmun"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="weather">
+        <div class="sec-head"><div><h2>날씨</h2><p>현재 날씨와 앞으로 10일 예보</p></div></div>
+        <div class="card">
+          <h3>지금 날씨 <span id="bWx"></span></h3>
+          <p class="desc" id="wxDesc"></p>
+          <div class="wx-now" id="wxNow"></div>
+        </div>
+        <div class="grid g2" style="margin-top:14px">
+          <div class="card">
+            <h3>10일 예보</h3>
+            <p class="desc">Open-Meteo 기상 모델 예보 · 지점을 고르세요
+              <select id="fcSpot" style="margin-left:6px;border:1px solid var(--line);border-radius:7px;padding:3px 6px;font:inherit"></select></p>
+            <div class="table-wrap"><table class="fc" id="tFc"></table></div>
+          </div>
+          <div class="card">
+            <h3>지난 기간 기온 · 강수 (제주시)</h3>
+            <p class="desc">선택 기간과 같은 길이</p>
+            <div class="chart-box"><canvas id="cWxPast"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="sales">
+        <div class="sec-head"><div><h2>매출 연계</h2><p>지정면세점 매출을 입력하면 수요 지표와 함께 움직이는 정도를 계산합니다.</p></div></div>
+        <div class="card" id="salesCard"></div>
+      </section>
+
+      <section id="report">
+        <div class="sec-head"><div><h2>10일 단위 · 월간 리포트</h2><p>상순(1~10일)·중순(11~20일)·하순(21일~말일) 기준. 방문·매출은 합계, 검색·기온은 평균입니다.</p></div>
+          <button class="btn" id="csvBtn">표 CSV 내려받기</button></div>
+        <div class="card"><h3>10일 단위 (순별)</h3><p class="desc">진행 중인 순은 집계된 날 수를 함께 표시합니다.</p><div class="table-wrap"><table id="tXun"></table></div></div>
+        <div class="card" style="margin-top:14px"><h3>월간</h3><p class="desc">최근 4개월</p><div class="table-wrap"><table id="tMonth"></table></div></div>
+      </section>
+
+      <section id="sources">
+        <div class="sec-head"><div><h2>데이터 출처와 상태</h2><p>각 출처의 마지막 갱신 시각과 상태입니다.</p></div></div>
+        <div class="card"><div class="table-wrap"><table id="tSources"></table></div>
+          <p class="legend-note">실시간 = API에서 받아온 값 · 예시 = 키가 없어 화면 구성을 보여주는 가상의 값(분석에 쓰지 마세요) · 입력 = 관리자 화면 입력값</p>
+        </div>
+      </section>
+
+      <div class="foot">검색 지수는 상대값이라 키워드 간 크기 비교는 같은 묶음 안에서만 의미가 있습니다. 방문자수(통신 데이터)는 관광객과 정의가 같지 않습니다. 상관관계는 함께 움직이는 정도일 뿐 원인과 결과를 뜻하지 않습니다.</div>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

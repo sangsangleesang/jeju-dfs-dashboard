@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>데이터 입력 · 제주 지정면세점 수요 대시보드</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar"><div class="brand"><div class="mark"></div><div><h1>데이터 입력</h1><small>API로 받을 수 없는 지표를 직접 넣습니다</small></div></div>
+<div class="top-actions"><a class="btn" href="/">← 대시보드</a></div></header>
+<div class="admin-wrap">
+  <div class="card">
+    <h3>관리자 비밀번호</h3>
+    <p class="desc">배포 화면 환경변수 ADMIN_PASSWORD에 넣은 값입니다. 이 탭을 닫으면 다시 입력해야 합니다.</p>
+    <div class="form-grid"><label class="f">비밀번호<input type="password" id="pw" autocomplete="current-password"></label>
+      <div style="display:flex;align-items:flex-end"><button class="btn primary" id="login">확인</button></div></div>
+    <div class="msg" id="mLogin"></div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h3>하루치 입력</h3>
+    <p class="desc">비운 칸은 저장하지 않습니다. 같은 날짜를 다시 저장하면 덮어씁니다.</p>
+    <div class="form-grid">
+      <label class="f">날짜<input type="date" id="fDate"></label>
+      <label class="f">내국인 입도객 (명)<input inputmode="numeric" id="f_inbound_domestic" placeholder="관광협회 집계"></label>
+      <label class="f">우도 방문객 (명)<input inputmode="numeric" id="f_udo"></label>
+      <label class="f">중문관광단지 방문객 (명)<input inputmode="numeric" id="f_jungmun"></label>
+      <label class="f">지정면세점 매출 (원)<input inputmode="numeric" id="f_sales"></label>
+    </div>
+    <div style="margin-top:12px"><button class="btn primary" id="save">저장</button></div>
+    <div class="msg" id="mSave"></div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h3>CSV로 한꺼번에 올리기</h3>
+    <p class="desc">첫 줄 머리글: <b>날짜,내국인입도객,우도,중문,매출</b> (필요한 열만 있어도 됩니다). 엑셀에서 'CSV(쉼표로 분리)'로 저장하세요.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="file" id="csv" accept=".csv,text/csv">
+      <button class="btn primary" id="upload">올리기</button>
+      <a class="btn" href="/api/manual/template.csv">빈 양식 받기</a>
+      <a class="btn" href="/api/manual/export.csv">입력된 전체 내려받기</a>
+    </div>
+    <div class="msg" id="mUp"></div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h3>최근 입력값</h3>
+    <div class="table-wrap"><table id="tRecent"></table></div>
+  </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const M={inbound_domestic:"내국인 입도객",udo:"우도",jungmun:"중문",sales:"매출"};
+let pw=""; try{pw=sessionStorage.getItem("jdfs_pw")||""}catch(e){}
+$("pw").value=pw;
+$("fDate").value=new Date(Date.now()+9*3600e3-86400e3).toISOString().slice(0,10);
+function msg(id,ok,t){const e=$(id);e.className="msg "+(ok?"ok":"err");e.textContent=t;}
+async function call(url,opt={}){opt.headers=Object.assign({"X-Admin-Password":pw},opt.headers||{});const r=await fetch(url,opt);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.detail||("오류 "+r.status));return j;}
+$("login").onclick=async()=>{pw=$("pw").value.trim();try{await call("/api/admin/check",{method:"POST"});try{sessionStorage.setItem("jdfs_pw",pw)}catch(e){}msg("mLogin",true,"확인되었습니다.");}catch(e){msg("mLogin",false,e.message);}};
+$("save").onclick=async()=>{const rows=Object.keys(M).map(k=>({metric:k,date:$("fDate").value,value:$("f_"+k).value})).filter(r=>r.value.trim()!=="");
+ if(!rows.length)return msg("mSave",false,"입력된 숫자가 없습니다.");
+ try{const j=await call("/api/manual",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(rows)});msg("mSave",true,j.saved+"개 값을 저장했습니다.");Object.keys(M).forEach(k=>$("f_"+k).value="");loadRecent();}catch(e){msg("mSave",false,e.message);}};
+$("upload").onclick=async()=>{const f=$("csv").files[0];if(!f)return msg("mUp",false,"파일을 고르세요.");const fd=new FormData();fd.append("file",f);
+ try{const j=await call("/api/manual/upload",{method:"POST",body:fd});msg("mUp",true,`${j.saved}개 값 저장 (${j.columns.join(", ")})`+(j.errors.length?` · 건너뛴 줄: ${j.errors.join(" / ")}`:""));loadRecent();}catch(e){msg("mUp",false,e.message);}};
+async function del(m,d){if(!confirm(`${d} ${M[m]} 값을 지울까요?`))return;try{await call(`/api/manual?metric=${m}&date=${d}`,{method:"DELETE"});loadRecent();}catch(e){alert(e.message);}}
+async function loadRecent(){const j=await (await fetch("/api/data")).json();const m=j.manual;const ds=[...new Set(Object.values(m).flatMap(o=>Object.keys(o)))].sort().reverse().slice(0,40);
+ $("tRecent").innerHTML=`<thead><tr><th>날짜</th>${Object.values(M).map(x=>`<th>${x}</th>`).join("")}</tr></thead><tbody>${ds.map(d=>`<tr><td>${d}</td>${Object.keys(M).map(k=>m[k][d]==null?'<td class="muted">–</td>':`<td>${Number(m[k][d]).toLocaleString("ko-KR")} <button class="btn small danger" onclick="del('${k}','${d}')">삭제</button></td>`).join("")}</tr>`).join("")||'<tr><td colspan="5" class="muted">아직 입력된 값이 없습니다.</td></tr>'}</tbody>`;}
+loadRecent();
+</script>
+</body>
+</html>
